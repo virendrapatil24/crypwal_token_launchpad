@@ -1,9 +1,13 @@
 import {
-  createInitializeMint2Instruction,
-  getMinimumBalanceForRentExemptMint,
-  MINT_SIZE,
-  TOKEN_PROGRAM_ID,
+  createInitializeMetadataPointerInstruction,
+  createInitializeMintInstruction,
+  ExtensionType,
+  getMintLen,
+  LENGTH_SIZE,
+  TOKEN_2022_PROGRAM_ID,
+  TYPE_SIZE,
 } from "@solana/spl-token";
+import { createInitializeInstruction, pack } from "@solana/spl-token-metadata";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { Keypair, SystemProgram, Transaction } from "@solana/web3.js";
 import { useState } from "react";
@@ -17,30 +21,62 @@ export function TokenLaunchpad() {
   const wallet = useWallet();
 
   const createToken = async () => {
-    const lamports = await getMinimumBalanceForRentExemptMint(connection);
     const payerPublicKey = wallet.publicKey;
     const mintKeyPair = Keypair.generate();
+    const decimals = 9;
 
     if (!payerPublicKey) {
       alert("Wallet not connected!");
       return;
     }
 
+    const metadata = {
+      mint: mintKeyPair.publicKey,
+      name: "Meow100x",
+      symbol: "M100x",
+      uri: "https://virendrapatil24.github.io/metadata/metadata1/metadata.json",
+      additionalMetadata: [],
+    };
+
+    const mintLen = getMintLen([ExtensionType.MetadataPointer]);
+
+    const metadataLen = TYPE_SIZE + LENGTH_SIZE + pack(metadata).length;
+
+    const lamports = await connection.getMinimumBalanceForRentExemption(
+      mintLen + metadataLen
+    );
+
     const transaction = new Transaction().add(
       SystemProgram.createAccount({
         fromPubkey: payerPublicKey,
         newAccountPubkey: mintKeyPair.publicKey,
-        space: MINT_SIZE,
+        space: mintLen,
         lamports,
-        programId: TOKEN_PROGRAM_ID,
+        programId: TOKEN_2022_PROGRAM_ID,
       }),
-      createInitializeMint2Instruction(
+      createInitializeMetadataPointerInstruction(
         mintKeyPair.publicKey,
-        9,
         payerPublicKey,
+        mintKeyPair.publicKey,
+        TOKEN_2022_PROGRAM_ID
+      ),
+      createInitializeMintInstruction(
+        mintKeyPair.publicKey,
+        decimals,
         payerPublicKey,
-        TOKEN_PROGRAM_ID
-      )
+        null,
+        TOKEN_2022_PROGRAM_ID
+      ),
+      createInitializeInstruction({
+        programId: TOKEN_2022_PROGRAM_ID,
+        mint: mintKeyPair.publicKey,
+        metadata: mintKeyPair.publicKey,
+        name: metadata.name,
+        symbol: metadata.symbol,
+        uri: metadata.uri,
+        mintAuthority: payerPublicKey,
+        updateAuthority: payerPublicKey,
+      })
     );
 
     transaction.feePayer = payerPublicKey;
