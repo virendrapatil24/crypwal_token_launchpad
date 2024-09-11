@@ -133,7 +133,6 @@ export function TokenLaunchpad() {
   return (
     <div
       style={{
-        height: "100vh",
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
