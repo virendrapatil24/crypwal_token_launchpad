@@ -1,7 +1,10 @@
 import {
+  createAssociatedTokenAccountInstruction,
   createInitializeMetadataPointerInstruction,
   createInitializeMintInstruction,
+  createMintToInstruction,
   ExtensionType,
+  getAssociatedTokenAddressSync,
   getMintLen,
   LENGTH_SIZE,
   TOKEN_2022_PROGRAM_ID,
@@ -15,7 +18,7 @@ import { useState } from "react";
 export function TokenLaunchpad() {
   const [tokenName, setTokenName] = useState("");
   const [tokenSymbol, setTokenSymbol] = useState("");
-  const [tokenImage, setTokenImage] = useState("");
+  const [tokenURI, setTokenURI] = useState("");
   const [tokenInitialSupply, setTokenInitialSupply] = useState("");
   const { connection } = useConnection();
   const wallet = useWallet();
@@ -30,11 +33,16 @@ export function TokenLaunchpad() {
       return;
     }
 
+    if (!(tokenName && tokenSymbol && tokenURI && tokenInitialSupply)) {
+      alert("Please fill all the token required data!!!");
+      return;
+    }
+
     const metadata = {
       mint: mintKeyPair.publicKey,
-      name: "Meow100x",
-      symbol: "M100x",
-      uri: "https://virendrapatil24.github.io/metadata/metadata1/metadata.json",
+      name: tokenName,
+      symbol: tokenSymbol,
+      uri: tokenURI,
       additionalMetadata: [],
     };
 
@@ -87,7 +95,39 @@ export function TokenLaunchpad() {
 
     await wallet.sendTransaction(transaction, connection);
     console.log(`Token mint created at ${mintKeyPair.publicKey.toBase58()}`);
-    alert(`Token mint created at ${mintKeyPair.publicKey.toBase58()}`);
+
+    const associatedToken = getAssociatedTokenAddressSync(
+      mintKeyPair.publicKey,
+      payerPublicKey,
+      false,
+      TOKEN_2022_PROGRAM_ID
+    );
+
+    const transaction2 = new Transaction().add(
+      createAssociatedTokenAccountInstruction(
+        payerPublicKey,
+        associatedToken,
+        payerPublicKey,
+        mintKeyPair.publicKey,
+        TOKEN_2022_PROGRAM_ID
+      )
+    );
+
+    await wallet.sendTransaction(transaction2, connection);
+
+    const transaction3 = new Transaction().add(
+      createMintToInstruction(
+        mintKeyPair.publicKey,
+        associatedToken,
+        payerPublicKey,
+        Number(tokenInitialSupply),
+        [],
+        TOKEN_2022_PROGRAM_ID
+      )
+    );
+
+    await wallet.sendTransaction(transaction3, connection);
+    alert("Minted!");
   };
 
   return (
@@ -120,9 +160,9 @@ export function TokenLaunchpad() {
       <input
         className="inputText"
         type="text"
-        placeholder="Image URL"
-        value={tokenImage}
-        onChange={(e) => setTokenImage(e.target.value)}
+        placeholder="Token URI"
+        value={tokenURI}
+        onChange={(e) => setTokenURI(e.target.value)}
       ></input>{" "}
       <br />
       <input
